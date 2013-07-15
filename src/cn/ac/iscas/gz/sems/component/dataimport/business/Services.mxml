@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<cairngorm:ServiceLocator xmlns:fx="http://ns.adobe.com/mxml/2009"
+						  xmlns:s="library://ns.adobe.com/flex/spark"  
+						  xmlns:mx="library://ns.adobe.com/flex/mx"
+						  xmlns:cairngorm="com.adobe.cairngorm.business.*">
+	<fx:Declarations>
+		<mx:HTTPService id="diAreaJsonHttpService"
+						url="asserts/di-area-data.json" 
+						method="GET"
+						useProxy="false" 
+						showBusyCursor="true"/>
+		
+		<mx:HTTPService id="diConcJsonHttpService"
+						url="asserts/di-conc-data.json" 
+						method="GET"
+						useProxy="false" 
+						showBusyCursor="true"/>
+		
+		<mx:HTTPService id="dataImportHttpService"
+						url="/sems/dataImport.do" 
+						method="GET"
+						useProxy="false" 
+						showBusyCursor="true"/>
+		
+	</fx:Declarations>  
+</cairngorm:ServiceLocator>
+
+

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- 
+文件描述:
+@author: 
+@version: 1.0
+@date: 2013-5-3 下午11:17:21
+@note:
+-->
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600" 
+			   xmlns:view="cn.ac.iscas.gz.sems.component.dataimport.view.*"
+			   xmlns:business="cn.ac.iscas.gz.sems.component.dataimport.business.*" 
+			   xmlns:controller="cn.ac.iscas.gz.sems.component.dataimport.controller.*"
+			   >
+
+	<fx:Script>
+		<![CDATA[
+			import cn.ac.iscas.gz.sems.local.ResourceUtil;
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				ResourceUtil.getInstance().changeLanguage("en_US");
+			}
+		]]>
+	</fx:Script>
+
+	<fx:Declarations>
+		<business:Services id="services"/>
+		<controller:DataImportController id="dataImportController"/>
+	</fx:Declarations>
+	
+	<!--
+	<view:ConcDataImportWindow x="10" y="39">
+	</view:ConcDataImportWindow>
+	-->
+	
+	<s:Button x="10" y="10" label="国际化" click="button1_clickHandler(event)"/>
+	
+	<!--
+	-->
+	<view:NodeCtrlDataImportWindow x="10" y="39">
+	</view:NodeCtrlDataImportWindow>
+	
+	
+</s:Application>

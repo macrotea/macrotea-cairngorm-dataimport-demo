@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- 
+本文件主要是：节点控制器数据导入窗口
+@author: 
+@version: 1.0
+@date: 2013-3-31 下午7:23:35
+@note:
+-->
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="550" height="300"
+			   title="{ResourceUtil.getInstance().getString('di.nodeCtrl.dataImport')}" 
+			   currentState="{viewStateModelLocator.state}" close="closeWindow()"
+			   creationComplete="creationCompleteHandler(event)">
+	<s:layout>
+		<s:BasicLayout/>
+	</s:layout>
+	
+	<fx:Metadata>
+		[ResourceBundle("message")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import cn.ac.iscas.gz.sems.cairngorm.MessageWrapper;
+			import cn.ac.iscas.gz.sems.component.dataimport.DataImportConstants;
+			import cn.ac.iscas.gz.sems.component.dataimport.event.DIAreaEvent;
+			import cn.ac.iscas.gz.sems.component.dataimport.model.DIAreaModelLocator;
+			import cn.ac.iscas.gz.sems.component.dataimport.model.DIConcModelLocator;
+			import cn.ac.iscas.gz.sems.component.dataimport.model.DINodeCtrlViewStateModelLocator;
+			import cn.ac.iscas.gz.sems.component.dataimport.vo.DIAreaVo;
+			import cn.ac.iscas.gz.sems.component.dataimport.vo.NodeCtrlDataImportParamVo;
+			import cn.ac.iscas.gz.sems.local.ResourceUtil;
+			import cn.ac.iscas.gz.sems.util.Printf;
+			import cn.ac.iscas.gz.sems.util.Tracer;
+			import cn.ac.iscas.gz.sems.util.WindowUtil;
+			
+			import com.adobe.cairngorm.control.CairngormEventDispatcher;
+			
+			import mx.events.FlexEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			/**
+			 * 上传请求 
+			 */		 
+			private var _uploadRequest:URLRequest;
+			
+			/**
+			 * 文件列表 
+			 */		
+			private var _fileReferenceList:FileReferenceList;
+			
+			/**
+			 * 集中器导入参数值对象
+			 */		
+			private var _nodeCtrlDataImportParamVo:NodeCtrlDataImportParamVo;
+			
+			/**
+			 * 区域模型定位器
+			 */
+			[Bindable]
+			protected var areaModelLocator:DIAreaModelLocator = DIAreaModelLocator.getInstance();
+			
+			/**
+			 * 集中控制器模型定位器
+			 */
+			[Bindable]
+			protected var concModelLocator:DIConcModelLocator = DIConcModelLocator.getInstance();
+			
+			/**
+			 * 视图状态模型定位器
+			 */
+			[Bindable]
+			protected var viewStateModelLocator:DINodeCtrlViewStateModelLocator = DINodeCtrlViewStateModelLocator.getInstance();
+
+			/**
+			 * 当导入时处理
+			 * @param event
+			 * 
+			 */	
+			protected function importButton_clickHandler(event:MouseEvent):void
+			{
+				refreshVo();
+				
+				/*数据校验*/
+				
+				var fileRef:FileReference = _nodeCtrlDataImportParamVo.fileRef;
+				
+				if(!fileRef){
+					MessageWrapper.makeFailByKey("请选择一个文件再执行导入","mw.di.file.error.plzSelectThenImport",true,null,this);
+					return;
+				}
+				
+				if(!_nodeCtrlDataImportParamVo.areaId){
+					MessageWrapper.makeFailByKey("请选择区域","mw.di.file.error.plzSelectArea",true,null,this);
+					return;
+				}
+				
+				if(!_nodeCtrlDataImportParamVo.concId){
+					MessageWrapper.makeFailByKey("请选择集中控制器","mw.di.file.error.plzSelectConc",true,null,this);
+					return;
+				}
+				
+				try{
+					refreshUploadRequestParam();
+					fileRef.upload(_uploadRequest, DataImportConstants.DEFAULT_UPLOAD_FIELDNAME);
+				}catch(err:Error){
+					MessageWrapper.makeFailByKey(Printf("importButton_clickHandler() - 文件上传出错! 文件名 = %s ",fileRef.name),"mw.di.file.error.upload",true,null,this);
+				}
+			}
+
+			/**
+			 * 关闭窗口
+			 */
+			protected function closeWindow():void
+			{
+				WindowUtil.closeWin(this);
+			}
+
+			/**
+			 * 当点击返回时处理
+			 * @param event
+			 */
+			protected function returnButton_clickHandler(event:MouseEvent):void
+			{
+				viewStateModelLocator.toDefault();
+				
+				//重置默认状态下的组件默认值
+				fileTxtInput.text="";
+				onlyCorrectModeRButton.selected=true;
+				keepFileOnServerCheckBox.selected = true;
+				// FIXME  / 2013-5-6 11:47:53 为什么这里不能绑定了?
+				areaModelLocator.resetSelectedAreaIndex();
+			}
+
+			/**
+			 * 当点击浏览时处理
+			 * @param event
+			 * 
+			 */
+			protected function browseButton_clickHandler(event:MouseEvent):void
+			{
+				try{
+					_fileReferenceList.browse([DataImportConstants.FILE_FILTER_XML]);
+				}catch(err:Error){
+					MessageWrapper.makeFailByKey("读取用户选择的文件出错! 原因: " + err.message,"mw.di.file.error.select",true,null,this);
+				}
+			}
+
+			/**
+			 * 创建完成时处处理
+			 * @param event
+			 */
+			protected function creationCompleteHandler(event:FlexEvent):void
+			{
+				initComponents();
+				initData();
+			}
+			
+			/**
+			 * 初始化数据
+			 */
+			private function initData():void
+			{
+				//分派事件
+				var areaEvent:DIAreaEvent = new DIAreaEvent(DIAreaEvent.GET_AUTH_AREA_LIST_CHAIN);
+				CairngormEventDispatcher.getInstance().dispatchEvent(areaEvent);
+			}
+			
+			/**
+			 * 初始化组件
+			 */		
+			private function initComponents():void
+			{
+				_nodeCtrlDataImportParamVo = new NodeCtrlDataImportParamVo();
+				_fileReferenceList = new FileReferenceList();
+				_fileReferenceList.addEventListener(Event.SELECT, selectedFileHandler);
+				// NOTICE  / 2013-5-6 11:50:17 注意地址的差异
+				_uploadRequest = new URLRequest(DataImportConstants.NODECTRL_DATA_IMPORT_URL);
+			}
+			
+			/**
+			 * 当已选择文件时处理 
+			 * @param event
+			 * 
+			 */		
+			private function selectedFileHandler(event:Event):void{
+				var fileArry:Array=_fileReferenceList.fileList;
+				
+				//只能选择一个文件
+				if(fileArry.length > DataImportConstants.MAX_FILE_SELECT){
+					MessageWrapper.makeFailByKey("只能选择一个文件上传","mw.di.file.error.onlyone",true,null,this);
+					return;
+				}
+				
+				//若尚未选择
+				if(fileArry.length == 0){
+					return;
+				}
+				
+				var oneFile:FileReference = FileReference(fileArry[0]);
+				configFileRefListeners(oneFile);
+				_nodeCtrlDataImportParamVo.fileRef = oneFile;
+				
+				//刷新文本框内容
+				fileTxtInput.text = oneFile.name;
+			}
+			
+			/**
+			 * 为每个FileReference实例配置监听器
+			 */
+			private function configFileRefListeners(fileRef:FileReference):void {
+				fileRef.addEventListener(Event.COMPLETE, uploadCompleteHandler);
+				fileRef.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+				fileRef.addEventListener(ProgressEvent.PROGRESS, progressHandler);  
+				fileRef.addEventListener(DataEvent.UPLOAD_COMPLETE_DATA, uploadDataCompleteHandler);
+			}
+			
+			private function progressHandler(event:ProgressEvent) : void {
+				Tracer.debug("文件导入中");
+				viewStateModelLocator.toImporting();
+			} 
+			
+			/**
+			 * 当上传完成时处理
+			 * @param event
+			 *
+			 */
+			private function uploadCompleteHandler(event:Event):void
+			{
+				Tracer.debug("文件导入完成");
+			}
+			
+			/**
+			 * 当出现IO错误时处理
+			 * @param event
+			 *
+			 */
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				viewStateModelLocator.toDefault();
+				MessageWrapper.makeFailByKey("文件导入出错","mw.di.file.error.import",true,null,this);
+			}
+			
+			/**
+			 * 当上传完成数据返回时处理
+			 * @param event
+			 *
+			 */
+			private function uploadDataCompleteHandler(event:DataEvent):void
+			{
+				Tracer.debug("文件导入后,服务器已返回数据");
+				viewStateModelLocator.toImportFinish();
+			}
+			
+			/**
+			 * 标签处理
+			 */		
+			private function commonLabelHandler(item:Object):String
+			{
+				if(item){
+					return item.label;
+				}else{
+					return "";
+				}
+			};
+
+			/**
+			 * 当区域变更时
+			 * @param event
+			 * 
+			 */
+			protected function areaSelecter_changeHandler(event:IndexChangeEvent):void
+			{
+				var selectedItem:Object=areaSelecter.selectedItem;
+				_nodeCtrlDataImportParamVo.areaId = selectedItem.id;
+				
+				//派发集中控制器数据列表关联查询事件
+				dispatchEventToGetAssoConcListBy(_nodeCtrlDataImportParamVo.areaId);
+			}
+			
+			/**
+			 * 根据区域Id派发查询关联集中器数据事件
+			 * @param areaId
+			 * 
+			 */
+			protected function dispatchEventToGetAssoConcListBy(areaId:Number):void
+			{
+				var areaVo:DIAreaVo = new DIAreaVo();
+				areaVo.id = areaId;
+				
+				//分派事件
+				var areaEvent:DIAreaEvent = new DIAreaEvent(DIAreaEvent.GET_ASSO_CONC_LIST);
+				areaEvent.dataModel = areaVo;
+				CairngormEventDispatcher.getInstance().dispatchEvent(areaEvent);
+			}
+
+			/**
+			 * 当集中控制器变更时
+			 * @param event
+			 * 
+			 */
+			protected function concSelecter_changeHandler(event:IndexChangeEvent):void
+			{
+				var selectedItem:Object=concSelecter.selectedItem;
+				_nodeCtrlDataImportParamVo.concId = selectedItem.id;
+			}
+			
+			/**
+			 * 刷新VO
+			 */
+			private function refreshVo():void
+			{
+				var modeValue:int = int(modeOptionRBGroup.selectedValue.toString());
+				
+				_nodeCtrlDataImportParamVo.areaId = int(areaSelecter.selectedItem.id);
+				_nodeCtrlDataImportParamVo.concId = int(concSelecter.selectedItem.id);
+				_nodeCtrlDataImportParamVo.filePath = fileTxtInput.text;
+				_nodeCtrlDataImportParamVo.importMode = modeValue;
+				_nodeCtrlDataImportParamVo.isKeepFileOnServer = Boolean(keepFileOnServerCheckBox.selected);
+			}
+			
+			/**
+			 * 刷新上传请求参数 
+			 */		
+			private function refreshUploadRequestParam():void{
+				var variables:URLVariables = new URLVariables();
+				variables.action = DataImportConstants.FILE_IMPORT_ACTION;
+				//设置其他参数
+				fillVariablesByDTO(variables);
+				_uploadRequest.data = variables;
+			}
+			
+			/**
+			 * 通过VO数据填充URL参数
+			 */	
+			private function fillVariablesByDTO(variables:URLVariables):void
+			{
+				variables.concId = _nodeCtrlDataImportParamVo.concId;
+				variables.areaId = _nodeCtrlDataImportParamVo.areaId;
+				variables.importMode = _nodeCtrlDataImportParamVo.importMode;
+				variables.isKeepFileOnServer = _nodeCtrlDataImportParamVo.isKeepFileOnServer;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<!-- // NOTICE  / 2013-5-6 11:51:56 状态名确保与DIViewStateModelLocator类中的常量状态名一致,因为不能绑定,需要两边维护-->
+	<s:states>
+		<s:State name="DefaultState"/>
+		<s:State name="ImportingState"/>
+		<s:State name="ImportFinishState"/>
+	</s:states>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup id="modeOptionRBGroup"/>
+	</fx:Declarations>
+	<!--
+		// NOTICE  / 2013-3-31 19:40:52 
+		通过百分比的宽高值让容器内的组件适应性布局
+	-->
+	<s:VGroup x="0" y="0" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" includeIn="DefaultState,ImportingState">
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle" includeIn="DefaultState">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.area')}：" id="areaLabel"/>
+			<s:DropDownList id="areaSelecter" labelFunction="commonLabelHandler" change="areaSelecter_changeHandler(event)" dataProvider="{areaModelLocator.dataModelList}" selectedIndex="{areaModelLocator.selectedAreaIndex}" requireSelection="true"/>
+			<s:Label text="{ResourceUtil.getInstance().getString('di.conc')}：" id="concLabel"/>
+			<s:DropDownList id="concSelecter" labelFunction="commonLabelHandler" change="concSelecter_changeHandler(event)" dataProvider="{concModelLocator.dataModelList}" selectedIndex="{concModelLocator.selectedConcIndex}" requireSelection="true"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle" includeIn="DefaultState">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.file')}：" id="fileLabel"/>
+			<s:TextInput id="fileTxtInput"/>
+			<s:Button label="{ResourceUtil.getInstance().getString('di.browse')}" id="browseButton" click="browseButton_clickHandler(event)"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle" includeIn="DefaultState">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.option')}："/>
+			<s:Label text="{ResourceUtil.getInstance().getString('di.if.dataImport.error')}"/>
+			<s:RadioButton label="{ResourceUtil.getInstance().getString('di.only.correct.record')}" groupName="modeOptionRBGroup" id="onlyCorrectModeRButton" value="{DataImportConstants.MODE_ONLY_CORRECT}" selected="true"/>
+			<s:RadioButton label="{ResourceUtil.getInstance().getString('di.rollback')}" groupName="modeOptionRBGroup" id="rollbackModeRButton" value="{DataImportConstants.MODE_ROLLBACK}"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle" includeIn="DefaultState">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.setting')}：" id="settingLabel"/>
+			<s:CheckBox label="{ResourceUtil.getInstance().getString('di.isKeepFileOnServer')}" id="keepFileOnServerCheckBox" selected="true"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="center" verticalAlign="middle">
+			<!-- // NOTICE  / 2013-5-6 11:19:42 && 的写法 -->
+			<s:Button label="{ResourceUtil.getInstance().getString('di.import')}" id="importButton" includeIn="DefaultState" click="importButton_clickHandler(event)" enabled="{areaModelLocator.actionButtonEnable}"/>
+			<s:Button label="{ResourceUtil.getInstance().getString('di.close')}" id="closeButtonInDefaultState" includeIn="DefaultState" click="closeWindow()"/>
+			<s:Label includeIn="ImportingState" text="{ResourceUtil.getInstance().getString('di.dataImporting')}"/>
+		</s:HGroup>
+	</s:VGroup>
+	<s:VGroup includeIn="ImportFinishState" x="0" y="0" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+		<s:HGroup width="96%" height="20%" horizontalAlign="center" verticalAlign="middle">
+			<s:Label id="importResultLabel" fontSize="18" />
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.filePath')}："/><s:Label id="filePathLabel"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.operate.elapsedTime')}："/><s:Label id="importConsumedTimeLabel"/> 
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle">
+			<s:HGroup width="100%" height="100%" horizontalAlign="left" verticalAlign="middle">
+				<s:Label text="{ResourceUtil.getInstance().getString('di.recordTotal')}："/><s:Label id="recordTotalLabel"/> <s:Label text="条"/>
+			</s:HGroup>
+			<s:HGroup width="100%" height="100%" horizontalAlign="left" verticalAlign="middle">
+				<s:Label text="{ResourceUtil.getInstance().getString('di.recordTotal.success')}："/><s:Label id="succRecordTotalLabel"/> <s:Label text="条"/>
+			</s:HGroup>
+			<s:HGroup width="100%" height="100%" horizontalAlign="left" verticalAlign="middle">
+				<s:Label text="{ResourceUtil.getInstance().getString('di.recordTotal.fail')}："/><s:Label id="failRecordTotalLabel"/> <s:Label text="条"/>
+			</s:HGroup>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="left" verticalAlign="middle">
+			<s:Label text="{ResourceUtil.getInstance().getString('di.recordTotal.fail.ids')}："/><s:Label id="failRecordIdListLabel"/>
+		</s:HGroup>
+		<s:HGroup width="96%" height="20%" horizontalAlign="center" verticalAlign="middle">
+			<s:Button label="{ResourceUtil.getInstance().getString('di.return')}" id="returnButton" click="returnButton_clickHandler(event)"/>
+			<s:Button label="{ResourceUtil.getInstance().getString('di.close')}" id="closeButtonInImportFinishState" click="closeWindow()"/>
+		</s:HGroup>
+	</s:VGroup>
+</s:TitleWindow>
